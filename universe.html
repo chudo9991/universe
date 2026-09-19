@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Модель Вселенной</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+        }
+        
+        #info h1 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #4fc3f7;
+        }
+        
+        #info p {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fff;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .control-group {
+            margin-bottom: 10px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        
+        input[type="range"] {
+            width: 200px;
+        }
+        
+        button {
+            background: #4fc3f7;
+            border: none;
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        
+        button:hover {
+            background: #29b6f6;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🌌 Интерактивная Модель Вселенной</h1>
+        <p>Исследуйте процедурно сгенерированную вселенную с тысячами галактик, звезд и туманностей. Используйте мышь для вращения, колесо прокрутки для зума.</p>
+    </div>
+    
+    <div id="controls">
+        <div class="control-group">
+            <label>Скорость вращения:</label>
+            <input type="range" id="rotationSpeed" min="0" max="100" value="20">
+        </div>
+        <div class="control-group">
+            <button id="addGalaxy">Добавить галактику</button>
+            <button id="resetView">Сброс вида</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Основные переменные
+        let scene, camera, renderer, controls;
+        let galaxies = [];
+        let stars = [];
+        let nebulae = [];
+        let rotationSpeed = 0.002;
+        
+        // Инициализация сцены
+        function init() {
+            // Создание сцены
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000011);
+            scene.fog = new THREE.FogExp2(0x000011, 0.0002);
+            
+            // Настройка камеры
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                10000
+            );
+            camera.position.set(0, 200, 500);
+            
+            // Рендерер
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+            
+            // Контролы орбиты
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 100;
+            controls.maxDistance = 2000;
+            
+            // Освещение
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0xffffff, 1, 1000);
+            pointLight.position.set(0, 0, 0);
+            scene.add(pointLight);
+            
+            // Создание фонового звездного неба
+            createStarField();
+            
+            // Создание начальных галактик
+            for (let i = 0; i < 5; i++) {
+                createGalaxy();
+            }
+            
+            // Создание туманностей
+            createNebulae();
+            
+            // Обработчики событий
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('rotationSpeed').addEventListener('input', updateRotationSpeed);
+            document.getElementById('addGalaxy').addEventListener('click', createGalaxy);
+            document.getElementById('resetView').addEventListener('click', resetView);
+            
+            // Запуск анимации
+            animate();
+        }
+        
+        // Создание звездного поля
+        function createStarField() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 10000;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount * 3; i += 3) {
+                // Позиции звезд в сфере
+                const radius = 2000 + Math.random() * 3000;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i + 2] = radius * Math.cos(phi);
+                
+                // Цвета звезд (от голубых до красных)
+                const colorType = Math.random();
+                if (colorType < 0.1) {
+                    // Голубые звезды
+                    colors[i] = 0.5;
+                    colors[i + 1] = 0.7;
+                    colors[i + 2] = 1.0;
+                } else if (colorType < 0.3) {
+                    // Белые звезды
+                    colors[i] = 1.0;
+                    colors[i + 1] = 1.0;
+                    colors[i + 2] = 1.0;
+                } else if (colorType < 0.6) {
+                    // Желтые звезды
+                    colors[i] = 1.0;
+                    colors[i + 1] = 0.9;
+                    colors[i + 2] = 0.7;
+                } else {
+                    // Красные звезды
+                    colors[i] = 1.0;
+                    colors[i + 1] = 0.6;
+                    colors[i + 2] = 0.5;
+                }
+            }
+            
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                size: 2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const starField = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starField);
+            stars.push(starField);
+        }
+        
+        // Создание галактики
+        function createGalaxy() {
+            const galaxyGroup = new THREE.Group();
+            
+            // Параметры галактики
+            const params = {
+                count: 5000,
+                size: 0.5,
+                radius: 100,
+                branches: 3,
+                spin: 1,
+                randomness: 0.2,
+                randomnessPower: 3,
+                insideColor: '#ff6030',
+                outsideColor: '#1b3984'
+            };
+            
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(params.count * 3);
+            const colors = new Float32Array(params.count * 3);
+            
+            const colorInside = new THREE.Color(params.insideColor);
+            const colorOutside = new THREE.Color(params.outsideColor);
+            
+            for (let i = 0; i < params.count; i++) {
+                const i3 = i * 3;
+                
+                // Радиус звезды от центра
+                const radius = Math.random() * params.radius;
+                
+                // Угол спирали
+                const spinAngle = radius * params.spin;
+                const branchAngle = (i % params.branches) / params.branches * Math.PI * 2;
+                
+                // Случайное смещение
+                const randomX = Math.pow(Math.random(), params.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * params.randomness * radius;
+                const randomY = Math.pow(Math.random(), params.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * params.randomness * radius;
+                const randomZ = Math.pow(Math.random(), params.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * params.randomness * radius;
+                
+                positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i3 + 1] = randomY;
+                positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+                
+                // Смешивание цветов
+                const mixedColor = colorInside.clone();
+                mixedColor.lerp(colorOutside, radius / params.radius);
+                
+                colors[i3] = mixedColor.r;
+                colors[i3 + 1] = mixedColor.g;
+                colors[i3 + 2] = mixedColor.b;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const material = new THREE.PointsMaterial({
+                size: params.size,
+                sizeAttenuation: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                vertexColors: true
+            });
+            
+            const galaxy = new THREE.Points(geometry, material);
+            galaxyGroup.add(galaxy);
+            
+            // Добавление яркого центра галактики
+            const centerGeometry = new THREE.SphereGeometry(3, 16, 16);
+            const centerMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                transparent: true,
+                opacity: 0.8
+            });
+            const center = new THREE.Mesh(centerGeometry, centerMaterial);
+            galaxyGroup.add(center);
+            
+            // Случайная позиция в сцене
+            galaxyGroup.position.x = (Math.random() - 0.5) * 800;
+            galaxyGroup.position.y = (Math.random() - 0.5) * 200;
+            galaxyGroup.position.z = (Math.random() - 0.5) * 800;
+            
+            // Случайное вращение
+            galaxyGroup.rotation.x = Math.random() * Math.PI;
+            galaxyGroup.rotation.y = Math.random() * Math.PI;
+            
+            scene.add(galaxyGroup);
+            galaxies.push(galaxyGroup);
+        }
+        
+        // Создание туманностей
+        function createNebulae() {
+            const nebulaCount = 8;
+            
+            for (let i = 0; i < nebulaCount; i++) {
+                const nebulaGeometry = new THREE.SphereGeometry(
+                    20 + Math.random() * 30,
+                    16,
+                    16
+                );
+                
+                const nebulaMaterial = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color().setHSL(Math.random(), 0.7, 0.5),
+                    transparent: true,
+                    opacity: 0.1,
+                    side: THREE.DoubleSide
+                });
+                
+                const nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+                
+                nebula.position.x = (Math.random() - 0.5) * 1000;
+                nebula.position.y = (Math.random() - 0.5) * 400;
+                nebula.position.z = (Math.random() - 0.5) * 1000;
+                
+                scene.add(nebula);
+                nebulae.push(nebula);
+            }
+        }
+        
+        // Обновление скорости вращения
+        function updateRotationSpeed(event) {
+            rotationSpeed = event.target.value / 10000;
+        }
+        
+        // Сброс вида
+        function resetView() {
+            camera.position.set(0, 200, 500);
+            controls.reset();
+        }
+        
+        // Обработка изменения размера окна
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Анимационный цикл
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Вращение галактик
+            galaxies.forEach((galaxy, index) => {
+                galaxy.rotation.y += rotationSpeed * (index % 2 === 0 ? 1 : -1);
+            });
+            
+            // Пульсация туманностей
+            nebulae.forEach((nebula, index) => {
+                const scale = 1 + Math.sin(Date.now() * 0.001 + index) * 0.1;
+                nebula.scale.set(scale, scale, scale);
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Запуск приложения
+        init();
+    </script>
+</body>
+</html>
